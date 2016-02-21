@@ -1,0 +1,8 @@
+import numpy as np
+
+error = np.array([None]*len(t_star))
+
+for i in range(0, len(t_star)):
+    error[i] = (t_star[i] - t2[i])**2
+
+MSE = np.average(error)
