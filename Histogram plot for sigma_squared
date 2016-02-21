@@ -1,0 +1,11 @@
+from scipy.stats import norm
+import matplotlib.mlab as mlab
+import matplotlib.pyplot as plt
+fig = plt.figure(figsize = (12, 4))
+import numpy as np
+
+a = sigma_MP
+plt.hist(a, 70) 
+
+plt.xlabel('$\\sigma^2$', fontsize = 16)
+plt.ylabel('frequency')
