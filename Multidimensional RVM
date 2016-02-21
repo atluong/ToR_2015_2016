@@ -1,0 +1,101 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb  8 15:03:36 2016
+
+@author: anh admin
+"""
+
+import numpy as np
+import math
+from math import pi as PI
+
+data = np.genfromtxt("auto-mpg.data.txt") 
+
+N = 319
+x = data[0:N, 1:8]
+x_star = data[N:398, 1:8]
+t = data[0:N, 0]
+t2 = data[N:398, 0]
+
+"""
+Gaussian function
+"""
+def gaussian(x, mean, covariance):
+    return np.exp(-(x - mean)**2 / (2 * covariance**2)) / math.sqrt (2 * PI * covariance**2)
+    
+"""
+Kernel function
+"""
+def K(x1, x2):
+    return np.exp(-0.5 * np.linalg.norm(x1 - x2))
+
+
+"""
+Parameters initialisation
+"""
+ALPHA = 0.1
+sigma = 1
+w = np.array([1/N]*N)
+temp = np.array([None]*N)
+Phi = np.zeros((N, N))
+t_star = np.array([None]*len(x_star))
+
+"""
+Evaluate design matrix, Phi
+"""
+def phi(x_n, x):
+    for i in range(0, N):
+        temp[i] = K(x_n, x[i, :])
+    return temp
+
+for i in range(0, N):
+    Phi[i, :] = phi(x[i, :], x)
+    
+"""
+Create diagonal matrix A with diagonal alpha_0 to alpha_N
+"""
+A = np.zeros((N, N))
+np.fill_diagonal(A, ALPHA)
+
+"""
+Initialise Sigma and mu evaluation
+"""   
+Sigma = np.linalg.inv(sigma**-2 * np.dot(Phi.T, Phi) + A)
+mu = np.array(sigma**-2 * np.dot(np.dot(Sigma, Phi.T), t), dtype = float)   
+
+"""
+Evaluate posterior covariance matrix, Sigma
+"""
+def update_Sigma(sigma, A):
+    return np.linalg.inv(sigma**-2 * np.dot(Phi.T, Phi) + A)
+
+"""
+Evaluate posterior mean, mu
+"""
+def update_mu(sigma, Sigma):
+    return np.array(sigma**-2 * np.dot(np.dot(Sigma, Phi.T), t), dtype = float)
+    
+"""
+Optimising hyperparameters
+"""
+def maximise_parameters(i, Sigma, mu):
+    for j in range(0, 100): #100 iteration
+        gamma_i = 1 - A[i][i]*Sigma[i][i]
+        alpha_new = gamma_i/(mu[i]**2)
+        A[i][i] = alpha_new
+        variance_new = (np.linalg.norm(t - np.dot(Phi, mu))) / (N - Sigma[i][i]*gamma_i) 
+        Sigma = update_Sigma(variance_new, A)    
+        mu = update_mu(variance_new, Sigma)            
+
+for i in range(0, N):
+    maximise_parameters(i, Sigma, mu)    
+    
+"""
+Predict new data
+"""    
+for i in range(0, len(x_star)):
+    y_star = np.dot((mu.T), phi(x_star[i, :], x))
+    sigma_star = np.dot(np.dot(phi(x_star[i, :], x).T, Sigma), phi(x_star[i, :], x))
+    y_av = gaussian(x_star, y_star, sigma_star**(1/2))
+    max_x = x_star[y_av.argmax()]  
+    t_star[i] = max_x 
