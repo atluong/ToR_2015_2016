@@ -1,0 +1,175 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Feb  7 16:42:23 2016
+
+@author: admin
+"""
+
+import numpy as np
+import math
+from math import pi as PI
+
+data = np.genfromtxt("synthetic")
+
+"""
+Gaussian function
+"""
+def gaussian(x, mu, sigma):
+    return np.exp(-(x - mu)**2 / (2 * sigma**2)) / math.sqrt (2 * PI * sigma**2)
+    
+"""
+Kernel function
+"""
+def K(x1, x2):
+    return np.exp(-0.5* (0.5**-2) * np.linalg.norm(x1 - x2))
+
+"""
+Parameters initialisation
+"""
+x = np.linspace(-PI, PI, 100)
+N = len(x)
+t = np.array([None]*N)
+w = np.array([1/N]*N)
+temp = np.array([None]*N)
+Phi = np.zeros((N, N))
+t_star = np.array([None]*N)
+
+ALPHA = 1000
+sigma = 0.1
+
+"""
+Train data
+"""  
+for i in range (0, N):
+    #t[i] = math.sin(x[i])/x[i] + np.random.normal(0, 0.01)    
+    t[i] = math.sin(x[i]) + np.random.normal(0, 0.01)
+
+  
+"""    
+Evaluate desgin matrix, Phi. phi[0] is set to be 1
+"""
+def phi(x_n, x):
+    for i in range(0, N):
+        temp[i] = K(x_n, x[i])
+    return temp
+
+for i in range(0, N):
+    Phi[i, :] = phi(x[i], x)    
+
+"""
+Create diagonal matrix A with diagonal alpha_0 to alpha_N
+"""
+A = np.zeros((N, N))
+np.fill_diagonal(A, ALPHA)
+
+
+"""
+Initialise Sigma and mu evaluation
+"""   
+Sigma = np.linalg.inv(sigma**-2 * np.dot(Phi.T, Phi) + A)
+mu = np.array(sigma**-2 * np.dot(np.dot(Sigma, Phi.T), t), dtype = float)
+
+"""
+Evaluate posterior covariance matrix, Sigma
+"""
+def update_Sigma(sigma, A):
+    return np.linalg.inv(sigma**-2 * np.dot(Phi.T, Phi) + A)
+
+"""
+Evaluate posterior mean, mu
+"""
+def update_mu(sigma, Sigma):
+    return np.array(sigma**-2 * np.dot(np.dot(Sigma, Phi.T), t), dtype = float)
+    
+"""
+Probability for estimating alpha and sigma, since the probability is very low, it is multiplied by 1000,
+then log the answer for a reasonable number. This would not change the outcome, as the MCMC rejection 
+process is quantitative
+"""
+def probability(t, Phi, A, sigma):
+    return 1 / np.log(abs((2*PI)**(-N/2) * np.linalg.norm(sigma**2 * \
+    np.identity(N) + np.dot(np.dot(Phi, np.linalg.inv(A)), Phi.T))**(0.5) \
+    * np.exp(-0.5 * np.dot(np.dot(t.T, (sigma**2 * np.identity(N) + np.dot(np.dot(Phi, np.linalg.inv(A)), Phi.T))), t)))) 
+
+"""
+#MCMC on hyperparameter alpha
+"""
+iterations = 500
+alpha0 = ALPHA
+alpha_star = np.array([alpha0]*N)
+Alpha = np.zeros((iterations, N))
+Alpha[0, :] = alpha_star
+alpha_prev = alpha_star
+accepted_point = 0
+p = probability(t, Phi, np.diag(alpha_prev), sigma)
+
+for i in range(0, iterations):
+    step_size = np.random.randn(N) * 1000
+    alpha_dash = alpha_prev + step_size
+    p_dash = probability(t, Phi, np.diag(alpha_dash), sigma)
+    
+    if (np.exp(p_dash) > np.exp(p)):
+        p = p_dash
+        Alpha[accepted_point, :] = alpha_dash
+        accepted_point = accepted_point + 1
+        
+    else:
+        if (np.exp(p_dash)/np.exp(p) > np.random.uniform(0, 1)):
+            p = p_dash
+            Alpha[accepted_point, :] = alpha_dash
+            accepted_point = accepted_point + 1
+        
+for i in range(0, accepted_point):
+    alpha_star = alpha_star + Alpha[i, :]
+    
+alpha_star = alpha_star / accepted_point    
+
+"""
+#MCMC on parameter sigma
+"""            
+sigma0 = sigma
+sigma_MP = np.array([sigma0]*N)
+Sigma = np.zeros((iterations, N))
+Sigma[0, :] = sigma_MP
+sigma_prev = sigma_MP
+
+for j in range(0, N):
+    p = probability(t, Phi, np.diag(alpha_star), sigma_MP[j])
+    accepted_point = 0
+    for i in range(0, iterations):
+        step_size = np.random.normal(0, 0.1)
+        sigma_dash = sigma_prev[j] + step_size
+        p_dash = probability(t, Phi, np.diag(alpha_star), sigma_dash)
+        
+        if (np.exp(p_dash) > np.exp(p)):
+            p = p_dash
+            Sigma[accepted_point, j] = sigma_dash
+            accepted_point = accepted_point + 1
+            
+        else:
+            if (np.exp(p_dash)/np.exp(p) > np.random.uniform(0, 1)):
+                p = p_dash
+                Sigma[accepted_point, j] = sigma_dash
+                accepted_point = accepted_point + 1
+            
+for i in range (0, accepted_point):
+    sigma_MP = sigma_MP + Sigma[i, :]
+    
+sigma_MP = sigma_MP / accepted_point    
+
+"""
+#Prediction
+"""
+for i in range(0, N):
+    SIGMA = update_Sigma(sigma_MP[i], np.diag(alpha_star))  
+    mu = update_mu(sigma_MP[i], SIGMA)
+    
+x_star = np.linspace(-4, 4, 100)    
+t_star = np.array([None]*len(x_star))
+    
+for i in range(0, len(x_star)):
+    y_star = np.dot((mu.T), phi(x_star[i], x))
+    sigma_star = sigma_MP[i] + np.dot(np.dot(phi(x_star[i], x).T, SIGMA), phi(x_star[i], x))
+    y_av = gaussian(x_star, y_star, sigma_star**(1/2))
+    max_x = x_star[y_av.argmax()]  
+    t_star[i] = max_x
