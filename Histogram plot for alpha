@@ -1,0 +1,11 @@
+from scipy.stats import norm
+import matplotlib.mlab as mlab
+import matplotlib.pyplot as plt
+fig = plt.figure(figsize = (12, 4))
+import numpy as np
+
+a = alpha_star
+plt.hist(a, 70) 
+
+plt.xlabel('$\\alpha$', fontsize = 16)
+plt.ylabel('frequency')
